@@ -69,103 +69,66 @@ def process_frame(frame):
 
 # Set up the Streamlit interface
 st.title("Emotion Recognition App")
-st.sidebar.title("Choose Mode")
 
-# Sidebar options for live webcam or video processing
-mode = st.sidebar.selectbox("Select Mode", ["Live Webcam", "Process Video"])
+# Video processing mode
+st.header("Process Uploaded Video")
+uploaded_file = st.file_uploader("Upload a Video File", type=["mp4", "avi", "mov", "mkv"])
 
-# Initialize webcam variables
-video_capture = None
-webcam_active = False
+# Check if a video has been uploaded
+if uploaded_file:
+    # Save the uploaded file temporarily
+    temp_video_path = f"temp_{uploaded_file.name}"
+    with open(temp_video_path, "wb") as f:
+        f.write(uploaded_file.read())
 
-if mode == "Live Webcam":
-    # Buttons to start and stop the webcam
-    start_webcam = st.button("Start Webcam")
-    stop_webcam = st.button("Stop Webcam")
+    # Start processing video
+    st.info("Processing video. This might take some time...")
+    cap = cv2.VideoCapture(temp_video_path)
 
-    if start_webcam:
-        if video_capture is None or not video_capture.isOpened():
-            video_capture = cv2.VideoCapture(0)
-            if not video_capture.isOpened():
-                st.error("Could not open webcam")
-            else:
-                st.success("Webcam started successfully")
-                webcam_active = True
+    # Video properties
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    output_path = f"processed_{uploaded_file.name}"
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    if stop_webcam and webcam_active:
-        if video_capture and video_capture.isOpened():
-            video_capture.release()
-            st.success("Webcam stopped")
-        webcam_active = False
+    out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
 
-    # Display webcam feed
-    if webcam_active:
-        frame_window = st.empty()
+    # Initialize progress bar
+    
 
-        while webcam_active:
-            ret, frame = video_capture.read()
+    processed_frames = 0  # To track progress
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-            if not ret:
-                st.warning("Failed to grab frame, continuing...")
-                time.sleep(0.1)
-                continue
+        processed_frame = process_frame(frame)
+        out.write(processed_frame)
 
-            processed_frame = process_frame(frame)
-            processed_frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+        # Update progress bar
+       
 
-            frame_window.image(processed_frame_rgb, use_container_width=True)
-            time.sleep(0.1)
+    cap.release()
+    out.release()
 
+    # Clean up the temporary file after processing is done
+    os.remove(temp_video_path)
+
+    st.success("Video processing completed!")
+
+    # Provide download link
+    with open(output_path, "rb") as f:
+        st.download_button("Download Processed Video", f, file_name=output_path)
+
+    # Clean up the output video after download is provided
+    os.remove(output_path)
+
+
+    
+    # Rerun the app to reset the state after video download
+ 
 else:
-    # Video processing mode
-    st.header("Process Uploaded Video")
-    uploaded_file = st.file_uploader("Upload a Video File", type=["mp4", "avi", "mov", "mkv"])
-
-    if uploaded_file:
-        # Save the uploaded file temporarily
-        temp_video_path = f"temp_{uploaded_file.name}"
-        with open(temp_video_path, "wb") as f:
-            f.write(uploaded_file.read())
-
-        # Start processing video
-        st.info("Processing video. This might take some time...")
-        cap = cv2.VideoCapture(temp_video_path)
-
-        # Video properties
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        output_path = f"processed_{uploaded_file.name}"
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
-
-        # Initialize progress bar
-        progress_bar = st.progress(0)
-
-        processed_frames = 0  # To track progress
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            processed_frame = process_frame(frame)
-            out.write(processed_frame)
-
-            # Update progress bar
-            processed_frames += 1
-            progress_bar.progress(processed_frames / total_frames)
-
-        cap.release()
-        out.release()
-        os.remove(temp_video_path)  # Clean up temporary file
-
-        st.success("Video processing completed!")
-
-        # Provide download link
-        with open(output_path, "rb") as f:
-            st.download_button("Download Processed Video", f, file_name=output_path)
-
-        # Clean up the output video after download is provided
-        os.remove(output_path)
+    # If no video is uploaded, prompt the user to upload one
+    st.info("Waiting for a video upload to begin processing.")
